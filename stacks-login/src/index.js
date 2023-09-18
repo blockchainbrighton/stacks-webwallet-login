@@ -14,6 +14,8 @@ if (userSession.isUserSignedIn()) {
     document.getElementById('logoutBtn').style.display = 'none';
 }
 
+let ipfsURLGlobal = null;
+
 
 // All Stacks-related initialization code goes here
 
@@ -36,67 +38,84 @@ if (userSession.isUserSignedIn()) {
     console.log("Initial setup complete. IPFS client initialized.");
 
 
-    const ipfs = IpfsHttpClient.create({ host: 'localhost', port: '5001', protocol: 'http' });
+    const ipfs = IpfsHttpClient.create({ host: '127.0.0.1', port: '5001', protocol: 'http' });
 
 
     async function getPrice(id) {
-    console.log(`Fetching price for ${id}...`);
-    const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
-    const data = await response.json();
-    return data[id].usd;
-    console.log(`Price for ${id}: ${data[id].usd}`);
+        console.log(`Fetching price for ${id}...`);
+        const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`);
+        const data = await response.json();
+        console.log(`Price for ${id}: ${data[id].usd}`);
+        return data[id].usd;
     }
-
-    async function loadFiles() {
-    console.log("Loading files...");
-    const [stxPrice, btcPrice] = await Promise.all([getPrice('blockstack'), getPrice('bitcoin')]);
-    const files = document.getElementById('audioFiles').files;
-    const formContainer = document.getElementById('formsContainer');
-    formContainer.innerHTML = '';
-
-    let totalBtcCost = 0, totalUsdCost = 0, totalStxCost = files.length;
-
-
-    for (let file of files) {
-        console.log(`Processing file: ${file.name}`);
-        const fileSizeKB = file.size / 1024;
-        const btcCost = (file.size * 6) / 100000000; 
-        totalBtcCost += btcCost;
-        totalUsdCost += btcCost * btcPrice;
-
-        const newForm = document.createElement('div');
-        newForm.className = 'audioForm';
-        newForm.innerHTML = `
-            <input type="text" placeholder="File Name" class="fileName" value="${file.name}">
-            <select class="instrumentClass" name="instrumentClass">
-                ${Object.keys(instrumentClasses).map(className => `<option value="${className}">${className}</option>`).join('')}
-            </select>
-            <select class="instrumentType"></select>
-            <input type="text" placeholder="Creator Name" class="creatorName">
-            <div class="${getFileSizeColorClass(fileSizeKB)}">File Size: ${fileSizeKB.toFixed(2)} KB</div>
-            <div class="orange">Estimated Lowest Bitcoin Inscription Cost: ${btcCost.toFixed(8)} BTC ($${(btcCost * btcPrice).toFixed(2)})</div>
-            <div class="green">Cost to mint STX Audional NFT: 1 STX / $${stxPrice.toFixed(2)}</div>
-        `;
-        formContainer.appendChild(newForm);
-        updateTypeDropdown(newForm.querySelector('.instrumentType'), newForm.querySelector('.instrumentClass').value);
-        console.log(`Instrument class dropdown changed to: ${this.value}`);
+    
+    window.loadFiles = async function loadFiles() {
+        console.log("Loading files...");
+        const [stxPrice, btcPrice] = await Promise.all([getPrice('blockstack'), getPrice('bitcoin')]);
+        const files = document.getElementById('audioFiles').files;
+        const formContainer = document.getElementById('formsContainer');
+        formContainer.innerHTML = '';
+    
+        let totalBtcCost = 0, totalUsdCost = 0, totalStxCost = files.length;
+    
+        for (let file of files) {
+            console.log(`Processing file: ${file.name}`);
+            const fileSizeKB = file.size / 1024;
+            const btcCost = (file.size * 6) / 100000000; 
+            totalBtcCost += btcCost;
+            totalUsdCost += btcCost * btcPrice;
+    
+            console.log('About to create new form for file:', file.name);
+            const newForm = document.createElement('div');
+            newForm.className = 'audioForm';
+            newForm.innerHTML = `
+                <input type="text" placeholder="File Name" class="fileName" value="${file.name}">
+                <select class="instrumentClass" name="instrumentClass">
+                    ${Object.keys(instrumentClasses).map(className => `<option value="${className}">${className}</option>`).join('')}
+                </select>
+                <select class="instrumentType"></select>
+                <input type="text" placeholder="Creator Name" class="creatorName">
+                <div class="${getFileSizeColorClass(fileSizeKB)}">File Size: ${fileSizeKB.toFixed(2)} KB</div>
+                <div class="orange">Estimated Lowest Bitcoin Inscription Cost: ${btcCost.toFixed(8)} BTC ($${(btcCost * btcPrice).toFixed(2)})</div>
+                <div class="green">Cost to mint STX Audional NFT: 1 STX / $${stxPrice.toFixed(2)}</div>
+            `;
+            formContainer.appendChild(newForm);
+            console.log('Form appended to container for file:', file.name);
+            console.log('About to update type dropdown for file:', file.name);
+    
+            setTimeout(() => {
+                const instrumentClassElement = newForm.querySelector('.instrumentClass');
+                if (instrumentClassElement) {
+                    updateTypeDropdown(newForm.querySelector('.instrumentType'), instrumentClassElement.value);
+                    console.log(`Instrument class dropdown changed to: ${instrumentClassElement.value}`);
+                } else {
+                    console.warn("Couldn't find .instrumentClass element");
+                }
+            }, 0);
+        }
+    
+        document.getElementById('btcTotal').innerHTML = `<span class="orange">Total Bitcoin Inscription Cost: ${totalBtcCost.toFixed(8)} BTC ($${totalUsdCost.toFixed(2)})</span>`;
+        document.getElementById('stxTotal').innerHTML = `<span class="green">Total STX Minting Cost: ${totalStxCost} STX ($${(totalStxCost * stxPrice).toFixed(2)})</span>`;
+        attachClassDropdownListeners();
     }
-
-    document.getElementById('btcTotal').innerHTML = `<span class="orange">Total Bitcoin Inscription Cost: ${totalBtcCost.toFixed(8)} BTC ($${totalUsdCost.toFixed(2)})</span>`;
-    document.getElementById('stxTotal').innerHTML = `<span class="green">Total STX Minting Cost: ${totalStxCost} STX ($${(totalStxCost * stxPrice).toFixed(2)})</span>`;
-    attachClassDropdownListeners();
-    }
-
+    
     function attachClassDropdownListeners() {
-    document.querySelectorAll('.instrumentClass').forEach(dropdown => {
-        dropdown.addEventListener('change', function() {
-            updateTypeDropdown(this.nextElementSibling, this.value);
+        document.querySelectorAll('.instrumentClass').forEach(dropdown => {
+            dropdown.addEventListener('change', function() {
+                updateTypeDropdown(this.nextElementSibling, this.value);
+            });
         });
-    });
     }
-
+    
     function updateTypeDropdown(typeDropdown, selectedClass) {
-    typeDropdown.innerHTML = instrumentClasses[selectedClass].concat("User Defined").map(type => `<option value="${type}">${type}</option>`).join('');
+        const types = instrumentClasses[selectedClass];
+        if (!types) {
+            console.warn(`No instrument types found for class: ${selectedClass}`);
+            typeDropdown.innerHTML = ""; // Clearing dropdown if no types found
+            return;
+        }
+        console.log('selectedClass value:', selectedClass, 'instrumentClasses[selectedClass]:', types);
+        typeDropdown.innerHTML = types.concat("User Defined").map(type => `<option value="${type}">${type}</option>`).join('');
     }
 
     function getFileSizeColorClass(fileSizeKB) {
@@ -109,57 +128,57 @@ if (userSession.isUserSignedIn()) {
     return 'black';
     }
 
-    async function uploadAllToIPFS() {
-    console.log("Uploading all files to IPFS...");
-    const forms = document.querySelectorAll('.audioForm');
-    const files = document.getElementById('audioFiles').files;
-    const linksContainer = document.getElementById('ipfsLinks');
-    linksContainer.innerHTML = '';
-
-    for (let i = 0; i < files.length; i++) {
-        console.log(`Uploading file to IPFS: ${file.name}`);
-        const file = files[i];
-        if (file.size / 1024 > 350) {
-            alert('Files must be under 350kb per file');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = async function () {
-            const base64Data = reader.result;
-            const form = forms[i];
-            const jsonData = {
-                p: "audional",
-                op: "deploy",
-                audinal_id: "648e383daDbMUxq",
-                fileName: form.querySelector('.fileName').value,
-                instrumentClass: form.querySelector('.instrumentClass').value,
-                instrumentType: form.querySelector('.instrumentType').value,
-                creatorName: form.querySelector('.creatorName').value,
-                audioData: base64Data
+    window.uploadAllToIPFS = async function() {
+        console.log("Uploading all files to IPFS...");
+        const forms = document.querySelectorAll('.audioForm');
+        const files = document.getElementById('audioFiles').files;
+        const linksContainer = document.getElementById('ipfsLinks');
+        linksContainer.innerHTML = '';
+    
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            console.log(`Uploading file to IPFS: ${file.name}`);
+            
+            if (file.size / 1024 > 350) {
+                alert('Files must be under 350kb per file');
+                return;
+            }
+    
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async function () {
+                const base64Data = reader.result;
+                const form = forms[i];
+                const jsonData = {
+                    p: "audional",
+                    op: "deploy",
+                    audinal_id: "648e383daDbMUxq",
+                    fileName: form.querySelector('.fileName').value,
+                    instrumentClass: form.querySelector('.instrumentClass').value,
+                    instrumentType: form.querySelector('.instrumentType').value,
+                    creatorName: form.querySelector('.creatorName').value,
+                    audioData: base64Data
+                };
+                const ipfsURL = await uploadToIPFS(jsonData);
+                linksContainer.innerHTML += `<div>${jsonData.fileName}: ${ipfsURL}</div>`;
             };
-            const ipfsURL = await uploadToIPFS(jsonData);
-            linksContainer.innerHTML += `<div>${jsonData.fileName}: ${ipfsURL}</div>`;
-        };
+        }
     }
-    }
-
-    let ipfsURLGlobal = null;
 
     async function uploadToIPFS(data) {
-    console.log(`File uploaded to IPFS. URL: ${ipfsURL}`);
-    try {
-        const file = { path: 'audio.json', content: new TextEncoder().encode(JSON.stringify(data)) };
-        const result = await ipfs.add(file);
-        const ipfsURL = `https://ipfs.io/ipfs/${result.cid.toString()}`;
-        ipfsURLGlobal = ipfsURL; // Update the global variable
-        return ipfsURL;
-    } catch (error) {
-        console.error("Error in IPFS upload:", error);
-        throw error;
+        try {
+            const file = { path: 'audio.json', content: new TextEncoder().encode(JSON.stringify(data)) };
+            const result = await ipfs.add(file);
+            const ipfsURL = `https://ipfs.io/ipfs/${result.cid.toString()}`;
+            ipfsURLGlobal = ipfsURL; // Update the global variable
+            console.log(`File uploaded to IPFS. URL: ${ipfsURL}`);  // Moved this line here.
+            return ipfsURL;
+        } catch (error) {
+            console.error("Error in IPFS upload:", error);
+            throw error;
+        }
     }
-    }
+    
 
     const myAppName = 'My Stacks Web-App';
     const myAppIcon = window.location.origin + '/my_logo.png';
