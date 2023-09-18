@@ -1,0 +1,88 @@
+body {
+    background-color: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: Arial, sans-serif;
+}
+
+.container {
+    background-color: #333;
+    padding: 20px;
+    border-radius: 10px;
+    width: 700px;
+    height: 700px;
+    overflow-y: auto;
+}
+
+label, input, button {
+    margin-bottom: 10px;
+}
+
+#mintTextContainer {
+    display: flex;
+    align-items: center;
+}
+
+#audioFilesText {
+    color: white;
+    flex-grow: 1; /* Allow the text to expand and take available space */
+    margin-right: 10px; /* Add some space between text and button */
+}
+
+#loginButton {
+    background-color: #333; /* Optional styling for the button */
+    color: white; /* Optional styling for the button text */
+    border: none; /* Optional styling for the button border */
+}
+
+
+
+.audioForm {
+    background-color: #444;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+}
+
+.audioForm div {
+    padding: 5px;
+    border-bottom: 1px solid #555;
+}
+
+.audioForm div:last-child {
+    border-bottom: none;
+}
+
+.red {
+    color: red;
+}
+
+.green {
+    color: limegreen;
+}
+
+.blue {
+    color: dodgerblue;
+}
+
+.orange {
+    color: orange;
+}
+
+.pink {
+    color: rgb(241, 99, 70);
+}
+
+.bright-green {
+    color: limegreen;
+}
+
+.yellow {
+    color: yellow;
+}
+
+#audioFilesText {
+    color: white;
+}
