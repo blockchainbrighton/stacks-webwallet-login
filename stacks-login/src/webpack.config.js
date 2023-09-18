@@ -16,6 +16,7 @@ module.exports = {
     ],
     devServer: {
         static: './dist',
+        hot: false, // explicitly disable HMR
         open: true, // This will automatically open the browser when you run npm run dev
         port: 8080 // Specify a port if you want. By default, it will use 8080
     },
