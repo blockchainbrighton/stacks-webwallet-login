@@ -5,6 +5,57 @@ import { StacksTestnet } from '@stacks/network';
 const appConfig = new AppConfig(['store_write', 'publish_data']);
 const userSession = new UserSession({ appConfig });
 const network = new StacksTestnet();
+let walletLoaded = false; 
+
+// Declare a global flag at the start of your index.js
+window.walletInitCompleted = window.walletInitCompleted || false;
+
+function updateWalletStatus() {
+    if (userSession.isUserSignedIn()) {
+        const userData = userSession.loadUserData();
+        document.getElementById('walletStatus').textContent = `Logged in as: ${userData.profile.stxAddress.mainnet}`;
+        document.getElementById('logoutBtn').style.display = 'block';
+    } else {
+        document.getElementById('walletStatus').textContent = "Not logged in";
+        document.getElementById('logoutBtn').style.display = 'none';
+    }
+}
+
+function debounce(fn, delay) {
+    let timeout;
+    return function () {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => fn.apply(this, arguments), delay);
+    };
+}
+
+function loadWallet() {
+    if (walletLoaded) return; 
+
+    setTimeout(() => {
+        showConnect({
+            userSession,
+            appDetails: {
+                name: 'My Stacks Web-App',
+                icon: window.location.origin + '/my_logo.png',
+            },
+            onFinish: () => {
+                walletLoaded = true;
+                updateWalletStatus();
+            },
+            onCancel: () => {
+                console.log('User cancelled login');
+                walletLoaded = false;
+            }
+        });
+    }, 0);
+
+    document.getElementById('loginBtn').disabled = true;
+    setTimeout(() => {
+        document.getElementById('loginBtn').disabled = false;
+    }, 1000);
+}
+
 const ipfs = IpfsHttpClient.create({ host: '127.0.0.1', port: '5001', protocol: 'http' });
 const instrumentClasses = {
     "Select Class": ["Select Type"],
@@ -27,17 +78,6 @@ console.log("Initial setup complete. IPFS client initialized.");
 let isUploadComplete = false;
 localStorage.removeItem('ipfsMintURLs');
 
-
-function updateWalletStatus() {
-    if (userSession.isUserSignedIn()) {
-        const userData = userSession.loadUserData();
-        document.getElementById('walletStatus').textContent = `Logged in as: ${userData.profile.stxAddress.mainnet}`;
-        document.getElementById('logoutBtn').style.display = 'block';
-    } else {
-        document.getElementById('walletStatus').textContent = "Not logged in";
-        document.getElementById('logoutBtn').style.display = 'none';
-    }
-}
 
 function getFileSizeColorClass(fileSizeKB) {
     console.log(`File Size: ${fileSizeKB} KB - Color Class: [Your return value]`);
@@ -264,25 +304,22 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
     
     
         
-document.addEventListener('DOMContentLoaded', (event) => {
-    updateWalletStatus();
-
-    document.getElementById('loginBtn').addEventListener('click', () => {
-        showConnect({
-            userSession,
-            appDetails: {
-                name: 'My Stacks Web-App',
-                icon: window.location.origin + '/my_logo.png',
-            },
-            onFinish: updateWalletStatus,
-            onCancel: () => console.log('User cancelled login')
-        });
+    document.addEventListener('DOMContentLoaded', (event) => {
+        // Only run the initialization if it hasn't run before
+        if (!window.walletInitCompleted) {
+            updateWalletStatus();
+    
+            document.getElementById('loginBtn').addEventListener('click', debounce(loadWallet, 300));
+    
+            document.getElementById('mintButton').addEventListener('click', mintAudionalNFT);
+    
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                userSession.signUserOut();
+                walletLoaded = false;
+                updateWalletStatus();
+            });
+    
+            // Set the flag to true after initialization
+            window.walletInitCompleted = true;
+        }
     });
-
-    document.getElementById('mintButton').addEventListener('click', mintAudionalNFT);
-
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-        userSession.signUserOut();
-        updateWalletStatus();
-    });
-});
