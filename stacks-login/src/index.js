@@ -1,24 +1,40 @@
-import { AppConfig, UserSession, showConnect } from '@stacks/connect';
-import { stringAsciiCV } from '@stacks/transactions';
+import { AppConfig, UserSession, showConnect, openContractCall } from '@stacks/connect';
+import { stringAsciiCV, PostConditionMode, makeStandardSTXPostCondition, FungibleConditionCode, PostCondition, TransactionVersion, AnchorMode, makeContractCall, broadcastTransaction } from '@stacks/transactions';
 import { StacksTestnet } from '@stacks/network';
 
 const appConfig = new AppConfig(['store_write', 'publish_data']);
 const userSession = new UserSession({ appConfig });
 const network = new StacksTestnet();
+
 let walletLoaded = false; 
+let previousLoginStatus = null; // Track the previous login status
+
 
 // Declare a global flag at the start of your index.js
 window.walletInitCompleted = window.walletInitCompleted || false;
 
 function updateWalletStatus() {
-    if (userSession.isUserSignedIn()) {
+    const isLoggedIn = userSession.isUserSignedIn(); // Check the current status
+
+    if (isLoggedIn) {
         const userData = userSession.loadUserData();
-        document.getElementById('walletStatus').textContent = `Logged in as: ${userData.profile.stxAddress.mainnet}`;
+        document.getElementById('walletStatus').textContent = `Logged in as: ${userData.profile.stxAddress.testnet}`;
         document.getElementById('logoutBtn').style.display = 'block';
     } else {
         document.getElementById('walletStatus').textContent = "Not logged in";
         document.getElementById('logoutBtn').style.display = 'none';
     }
+
+    // Check if the login status has changed and log accordingly
+    if (previousLoginStatus !== null && previousLoginStatus !== isLoggedIn) {
+        if (isLoggedIn) {
+            console.log('User logged in');
+        } else {
+            console.log('User logged out');
+        }
+    }
+
+    previousLoginStatus = isLoggedIn; // Update the previous login status for the next call
 }
 
 function debounce(fn, delay) {
@@ -29,23 +45,26 @@ function debounce(fn, delay) {
     };
 }
 
+const APP_DETAILS = {
+    name: 'Audionals',
+    icon: window.location.origin + '/AudionalsLogo_Large.png',
+};
+
 function loadWallet() {
     if (walletLoaded) return; 
 
     setTimeout(() => {
         showConnect({
             userSession,
-            appDetails: {
-                name: 'My Stacks Web-App',
-                icon: window.location.origin + '/my_logo.png',
-            },
+            appDetails: APP_DETAILS,
             onFinish: () => {
                 walletLoaded = true;
-                updateWalletStatus();
+                updateWalletStatus(); // Call updateWalletStatus after the user logs in
             },
             onCancel: () => {
                 console.log('User cancelled login');
                 walletLoaded = false;
+                updateWalletStatus(); // Call updateWalletStatus after the user cancels login
             }
         });
     }, 0);
@@ -55,6 +74,7 @@ function loadWallet() {
         document.getElementById('loginBtn').disabled = false;
     }, 1000);
 }
+
 
 const ipfs = IpfsHttpClient.create({ host: '127.0.0.1', port: '5001', protocol: 'http' });
 const instrumentClasses = {
@@ -177,11 +197,11 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
             const file = { path: 'audio.json', content: new TextEncoder().encode(JSON.stringify(data)) };
             const result = await ipfs.add(file);
             const ipfsURL = `https://ipfs.io/ipfs/${result.cid.toString()}`;
-
+    
             let ipfsURLs = JSON.parse(localStorage.getItem('ipfsMintURLs') || "[]");
             ipfsURLs.push(ipfsURL);
             localStorage.setItem('ipfsMintURLs', JSON.stringify(ipfsURLs));
-
+    
             console.log(`File(s) uploaded to IPFS. URL: ${ipfsURL}`);
             return ipfsURL;
         } catch (error) {
@@ -203,7 +223,7 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
         console.log("Convert to audional JSON file button clicked");
         console.log("Uploading files to IPFS...");
         const forms = document.querySelectorAll('.audioForm');
-
+    
         const linksContainer = document.getElementById('ipfsLinks');
         const files = document.getElementById('audioFiles').files;
         let ipfsURLs = []; // Array to store all the IPFS URLs
@@ -215,7 +235,7 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
     
         for (let i = 0; i < files.length; i++) {
             let file = files[i];
-                    console.log(`Uploading file to IPFS: ${file.name}`);
+            console.log(`Uploading file to IPFS: ${file.name}`);
     
             if (file.size / 1024 > 350) {
                 alert(`File ${file.name} must be under 350kb`);
@@ -224,17 +244,28 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
     
             try {
                 const base64Data = await readFileAsDataURL(file);
-                
+    
                 const form = forms[i];
+                const instrumentClass = form.querySelector('.instrumentClass').value;
+                const instrumentType = form.querySelector('.instrumentType').value;
+                const creatorName = form.querySelector('.creatorName').value;
+    
                 const jsonData = {
                     fileName: form.querySelector('.fileName').value || file.name,
-                    audioData: base64Data
+                    audioData: base64Data,
+                    instrumentClass: instrumentClass,
+                    instrumentType: instrumentType,
+                    creatorName: creatorName
                 };
+    
+                console.log("JSON Data:", jsonData); // Log the JSON data before uploading
     
                 const ipfsURL = await uploadToIPFS(jsonData);
                 ipfsURLs.push(ipfsURL);  // Add the URL to the array
                 linksContainer.innerHTML += `<div>${jsonData.fileName}: ${ipfsURL}</div>`; // Append each URL to the links container
                 console.log("File uploaded!");
+    
+                console.log("JSON Data after upload:", jsonData); // Log the JSON data after uploading
     
             } catch (error) {
                 console.error(`Error uploading ${file.name} to IPFS:`, error);
@@ -250,8 +281,12 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
     
 
     async function mintAudionalNFT() {
-        console.log("Mint button clicked");
-
+        // Check if the user is signed in
+        if (!userSession.isUserSignedIn()) {
+            console.error("User is not signed in. Please sign in before minting.");
+            return;
+        }
+        
         const retrievedURLs = JSON.parse(localStorage.getItem('ipfsMintURLs') || "[]");
         console.log("Retrieved IPFS URLs from local storage:", retrievedURLs);
     
@@ -260,48 +295,54 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
             return;
         }
     
-        console.log(window.stacks);
-        const network = new StacksTestnet();
-        if (!network) {
-            console.error("Error initializing Stacks network.");
-            return;
-        }
-        console.log("Initialized Stacks network:", network);
-    
-        const contractAddress = 'ST16SYS65BZPZSGDSBANTAKDQD7HSTBZ9SXJSB47P.Audionals-V8'; // Replace with your contract's address
+        const contractAddress = 'ST16SYS65BZPZSGDSBANTAKDQD7HSTBZ9SXJSB47P';
         const contractName = 'Audionals-V8';
     
         for (let ipfsMintURL of retrievedURLs) {
             console.log(`Minting NFT for IPFS URL: ${ipfsMintURL}`);
+    
+            const feeAmount = 1; // The fee amount in STX
+    
+            const postConditions = [
+                makeStandardSTXPostCondition(
+                    userSession.loadUserData().profile.stxAddress.testnet,
+                    FungibleConditionCode.Greater, // Use Greater to check if the user has more than the required fee
+                    BigInt(feeAmount * 1_000_000)
+                )
+            ];
     
             const txOptions = {
                 contractAddress,
                 contractName,
                 functionName: 'claim',
                 functionArgs: [stringAsciiCV(ipfsMintURL)],
-                appDetails: {
-                    name: "Your App Name",
-                    icon: "URL to your app's icon"
-                },
-                postConditionMode: 0x01, // Post condition mode: Allow
+                // Note: You don't need the senderKey here as the wallet will handle signing.
                 network,
-                onFinish: (result) => {
-                    if (result.txId) {
-                        console.log(`Transaction successful for ${ipfsMintURL} with ID: ${result.txId}`);
-                    } else {
-                        console.log(`Transaction failed for ${ipfsMintURL}. No transaction ID.`);
-                    }
-                }
+                postConditions,
+                anchorMode: AnchorMode.Any
             };
     
-            console.log("Transaction options set up:", txOptions);
+            console.log("Transaction Options:", txOptions);
     
-            console.log("About to show Stacks connect popup.");
-            await showConnect(txOptions);
-            console.log("Stacks connect popup has been shown.");
+            try {
+                // Using @stacks/connect to open the transaction signing popup
+                await openContractCall({
+                    contractAddress: txOptions.contractAddress,
+                    contractName: txOptions.contractName,
+                    functionName: txOptions.functionName,
+                    functionArgs: txOptions.functionArgs,
+                    network: network,
+                    postConditions: txOptions.postConditions,
+                    appDetails: APP_DETAILS
+                });
+            } catch (e) {
+                console.error(`Transaction failed for ${ipfsMintURL}:`, e.message);
+            }
         }
     }
     
+     
+
     
         
     document.addEventListener('DOMContentLoaded', (event) => {
@@ -309,11 +350,18 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
         if (!window.walletInitCompleted) {
             updateWalletStatus();
     
-            document.getElementById('loginBtn').addEventListener('click', debounce(loadWallet, 300));
+            document.getElementById('loginBtn').addEventListener('click', () => {
+                console.log('Login button clicked');
+                loadWallet(); // Call the original function
+            });
     
-            document.getElementById('mintButton').addEventListener('click', mintAudionalNFT);
+            document.getElementById('mintButton').addEventListener('click', () => {
+                console.log('Mint button clicked');
+                mintAudionalNFT(); // Call the original function
+            });
     
             document.getElementById('logoutBtn').addEventListener('click', () => {
+                console.log('Logout button clicked');
                 userSession.signUserOut();
                 walletLoaded = false;
                 updateWalletStatus();
@@ -323,3 +371,4 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
             window.walletInitCompleted = true;
         }
     });
+    
