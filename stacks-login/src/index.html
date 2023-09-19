@@ -20,9 +20,11 @@
             <div id="btcTotal">Total Bitcoin Inscription Cost: 0 BTC ($0)</div>
             <div id="stxTotal">Total STX Minting Cost: 0 STX ($0)</div>
         </div>
-        <button onclick="uploadAllToIPFS()">Convert to Audional Json File</button>
+        <button onclick="uploadToIPFS()">Convert to Audional Json File</button>
         <div id="ipfsLinks"></div>
-        <button id="mintButton">Mint as Audional NFT</button>
+        <button id="mintButton"disabled>Mint as Audional NFT</button>
+        <button onclick="manualMint()">Manual Mint</button>
+
     </div>
     <script src="./bundle.js"></script>
 </body>
