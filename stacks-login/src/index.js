@@ -5,6 +5,9 @@ import { StacksTestnet } from '@stacks/network';
 const appConfig = new AppConfig(['store_write', 'publish_data']);
 const userSession = new UserSession({ appConfig });
 const network = new StacksTestnet();
+network.coreApiUrl = "https://stacks-node-api.testnet.stacks.co";
+network.bnsLookupUrl = "https://stacks-node-api.testnet.stacks.co";
+
 
 let walletLoaded = false; 
 let previousLoginStatus = null; // Track the previous login status
@@ -252,10 +255,10 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
     
                 const jsonData = {
                     fileName: form.querySelector('.fileName').value || file.name,
-                    audioData: base64Data,
+                    creatorName: creatorName,
                     instrumentClass: instrumentClass,
                     instrumentType: instrumentType,
-                    creatorName: creatorName
+                    audioData: base64Data
                 };
     
                 console.log("JSON Data:", jsonData); // Log the JSON data before uploading
@@ -286,7 +289,7 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
             console.error("User is not signed in. Please sign in before minting.");
             return;
         }
-        
+    
         const retrievedURLs = JSON.parse(localStorage.getItem('ipfsMintURLs') || "[]");
         console.log("Retrieved IPFS URLs from local storage:", retrievedURLs);
     
@@ -295,19 +298,20 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
             return;
         }
     
-        const contractAddress = 'ST16SYS65BZPZSGDSBANTAKDQD7HSTBZ9SXJSB47P';
-        const contractName = 'Audionals-V8';
+        const contractAddress = 'ST162D87CY84QVVCMJKNKGHC7GGXFGA0TAV32Q5TK';
+        const contractName = 'AudionalsTest_V9_2';
+    
+        const MICROSTX_IN_ONE_STX = 1_000_000;
+        const feeAmount = 1; // The fee amount in STX
     
         for (let ipfsMintURL of retrievedURLs) {
             console.log(`Minting NFT for IPFS URL: ${ipfsMintURL}`);
     
-            const feeAmount = 1; // The fee amount in STX
-    
             const postConditions = [
                 makeStandardSTXPostCondition(
-                    userSession.loadUserData().profile.stxAddress.testnet,
-                    FungibleConditionCode.Greater, // Use Greater to check if the user has more than the required fee
-                    BigInt(feeAmount * 1_000_000)
+                    'ST16SYS65BZPZSGDSBANTAKDQD7HSTBZ9SXJSB47P',  // CONTRACT-OWNER's address
+                    FungibleConditionCode.Equal,
+                    BigInt(feeAmount * MICROSTX_IN_ONE_STX)
                 )
             ];
     
@@ -316,7 +320,6 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
                 contractName,
                 functionName: 'claim',
                 functionArgs: [stringAsciiCV(ipfsMintURL)],
-                // Note: You don't need the senderKey here as the wallet will handle signing.
                 network,
                 postConditions,
                 anchorMode: AnchorMode.Any
@@ -340,6 +343,7 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
             }
         }
     }
+    
     
      
 
