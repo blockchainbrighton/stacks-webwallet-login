@@ -289,7 +289,8 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
             console.error("User is not signed in. Please sign in before minting.");
             return;
         }
-    
+        // Retrieve user data
+        const userData = userSession.loadUserData();
         const retrievedURLs = JSON.parse(localStorage.getItem('ipfsMintURLs') || "[]");
         console.log("Retrieved IPFS URLs from local storage:", retrievedURLs);
     
@@ -299,7 +300,7 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
         }
     
         const contractAddress = 'ST162D87CY84QVVCMJKNKGHC7GGXFGA0TAV32Q5TK';
-        const contractName = 'AudionalsTest_V9_2';
+        const contractName = 'Audionals_v9';
     
         const MICROSTX_IN_ONE_STX = 1_000_000;
         const feeAmount = 1; // The fee amount in STX
@@ -307,13 +308,6 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
         for (let ipfsMintURL of retrievedURLs) {
             console.log(`Minting NFT for IPFS URL: ${ipfsMintURL}`);
     
-            const postConditions = [
-                makeStandardSTXPostCondition(
-                    'ST16SYS65BZPZSGDSBANTAKDQD7HSTBZ9SXJSB47P',  // CONTRACT-OWNER's address
-                    FungibleConditionCode.Equal,
-                    BigInt(feeAmount * MICROSTX_IN_ONE_STX)
-                )
-            ];
     
             const txOptions = {
                 contractAddress,
@@ -321,9 +315,17 @@ function updateTypeDropdown(typeDropdown, selectedClass) {
                 functionName: 'claim',
                 functionArgs: [stringAsciiCV(ipfsMintURL)],
                 network,
-                postConditions,
+                postConditionMode: PostConditionMode.Deny,
+                postConditions: [
+                    makeStandardSTXPostCondition(
+                        userData.profile.stxAddress.testnet, // Use the address from user's profile
+                        FungibleConditionCode.Equal,
+                        BigInt(feeAmount * MICROSTX_IN_ONE_STX)
+                    )
+                ],
                 anchorMode: AnchorMode.Any
-            };
+            };            
+            
     
             console.log("Transaction Options:", txOptions);
     
